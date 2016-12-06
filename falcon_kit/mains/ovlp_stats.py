@@ -61,7 +61,7 @@ def filter_stats(readlines, min_len):
 
 
 def run_filter_stats(fn, db, min_len):
-    cmd = "/nfs/users/nfs_m/mm21/programs/FALCON-integrate/DALIGNER/LA4Falcon -mo %s %s" % (db, fn) 
+    cmd = "LA4Falcon -mo %s %s" % (db, fn) 
     reader = Reader(cmd)
     with reader:
         return fn, filter_stats(reader.readlines, min_len)

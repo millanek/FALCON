@@ -21,7 +21,7 @@ def get_pid_to_ctg(fn):
     return pid_to_ctg
 
 def run_tr_stage1(db_fn, fn, min_len, bestn, pid_to_ctg):
-    cmd = "/nfs/users/nfs_m/mm21/programs/FALCON-integrate/DALIGNER/LA4Falcon -mo %s %s" % (db_fn, fn)
+    cmd = "LA4Falcon -mo %s %s" % (db_fn, fn)
     reader = Reader(cmd)
     with reader:
         return fn, tr_stage1(reader.readlines, min_len, bestn, pid_to_ctg)
