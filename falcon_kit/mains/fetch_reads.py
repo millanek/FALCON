@@ -8,15 +8,15 @@ import re
 
 
 
-def fetch_ref_and_reads(base_dir, fofn, ctg_id, out_dir, min_ctg_lenth):
+def fetch_ref_and_reads(base_dir, fofn, ctg_id, out_dir, min_ctg_lenth, assemblyDir, assemblySuffix):
 
 
     read_fofn = fofn
     if out_dir == None:
         out_dir = os.path.join( base_dir, "3-unzip/reads")
 
-    ctg_fa = os.path.join( base_dir, "2-asm-falcon/p_ctg.fa")
-    read_map_dir = os.path.join( base_dir, "2-asm-falcon/read_maps" )
+    ctg_fa = os.path.join( base_dir, assemblyDir+"/p_ctg"+assemblySuffix+".fa")
+    read_map_dir = os.path.join( base_dir, assemblyDir+"/read_maps" )
 
     rawread_id_file = os.path.join( read_map_dir, "raw_read_ids" )
     pread_id_file = os.path.join( read_map_dir, "pread_ids" )
@@ -116,6 +116,8 @@ def parse_args(argv):
     parser.add_argument('--ctg_id', type=str, default="all", help='contig identifier in the contig fasta file')
     parser.add_argument('--out_dir', default=None, type=str, help='the output base_dir, default to `base_dir/3-unzip/reads` directory')
     parser.add_argument('--min_ctg_lenth', default=20000, type=int, help='the minimum length of the contig for the outputs, default=20000')
+    parser.add_argument('--assemblyDir', type=str, default="2-asm-falcon", help='the (sub)directory with the FALCON assembly contigs')
+    parser.add_argument('--assemblySuffix', type=str, default="", help='suffix for the assembly filenames sg_edges_list, utg_data, ctg_paths (can specify e.g. the parameters of the assembly)')
     #parser.add_argument('--ctg_fa', type=str, default="./2-asm-falcon/p_ctg.fa", help='path to the contig fasta file')
     #parser.add_argument('--read_map_dir', type=str, default="./2-asm-falcon/read_maps", help='path to the read-contig map directory')
     # we can run this in parallel mode in the furture

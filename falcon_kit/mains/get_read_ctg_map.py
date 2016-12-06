@@ -15,7 +15,7 @@ def make_dirs(d):
         os.makedirs(d)
 
 
-def get_read_ctg_map(rawread_dir, pread_dir, asm_dir):
+def get_read_ctg_map(rawread_dir, pread_dir, asm_dir, raw_db, corr_db, asm_sf):
 
     read_map_dir = os.path.abspath(os.path.join(asm_dir, "read_maps"))
     make_dirs(read_map_dir)
@@ -23,7 +23,7 @@ def get_read_ctg_map(rawread_dir, pread_dir, asm_dir):
     PypeMPWorkflow.setNumThreadAllowed(12, 12)
     wf = PypeMPWorkflow()
 
-    rawread_db = makePypeLocalFile( os.path.join( rawread_dir, "raw_reads.db" ) )
+    rawread_db = makePypeLocalFile( os.path.join( rawread_dir, raw_db ) )
     rawread_id_file = makePypeLocalFile( os.path.join( read_map_dir, "raw_read_ids" ) )
 
     @PypeTask( inputs = {"rawread_db": rawread_db},
@@ -37,7 +37,7 @@ def get_read_ctg_map(rawread_dir, pread_dir, asm_dir):
 
     wf.addTask( dump_rawread_ids )
 
-    pread_db = makePypeLocalFile( os.path.join( pread_dir, "preads.db" ) )
+    pread_db = makePypeLocalFile( os.path.join( pread_dir, corr_db ) )
     pread_id_file = makePypeLocalFile( os.path.join( read_map_dir, "pread_ids" ) )
 
     @PypeTask( inputs = {"pread_db": pread_db},
@@ -53,9 +53,9 @@ def get_read_ctg_map(rawread_dir, pread_dir, asm_dir):
 
     wf.refreshTargets() # block
 
-    sg_edges_list = makePypeLocalFile( os.path.join(asm_dir, "sg_edges_list") )
-    utg_data = makePypeLocalFile( os.path.join(asm_dir, "utg_data") )
-    ctg_paths = makePypeLocalFile( os.path.join(asm_dir, "ctg_paths") )
+    sg_edges_list = makePypeLocalFile( os.path.join(asm_dir, "sg_edges_list"+asm_sf) )
+    utg_data = makePypeLocalFile( os.path.join(asm_dir, "utg_data"+asm_sf) )
+    ctg_paths = makePypeLocalFile( os.path.join(asm_dir, "ctg_paths"+asm_sf) )
 
     inputs = { "rawread_id_file": rawread_id_file,
                "pread_id_file": pread_id_file,
@@ -113,17 +113,26 @@ def parse_args(argv):
 information from the chain of mapping: (contig id) -> (internal p-read id) -> (internal raw-read id) -> (original read id)',
               formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--basedir', type=str, default="./", help='the base working dir of a FALCON assembly')
+    parser.add_argument('--rawReadDir', type=str, default="0-rawreads", help='the (sub)directory where the DAZZLER database with raw PacBio reads is located')
+    parser.add_argument('--correctedReadDir', type=str, default="1-preads_ovl", help='the (sub)directory where the DAZZLER database with the corrected PacBio reads is located')
+    parser.add_argument('--assemblyDir', type=str, default="2-asm-falcon", help='the (sub)directory with the FALCON assembly contigs')
+    parser.add_argument('--rawReadDbName', type=str, default="raw_reads.db", help='the the name of the ACTUAL DAZZLER database with raw PacBio reads')
+    parser.add_argument('--correctReadDbName', type=str, default="preads.db", help='the the name of the ACTUAL DAZZLER database with the corrected PacBio reads')
+    parser.add_argument('--assemblySuffix', type=str, default="", help='suffix for the assembly filenames sg_edges_list, utg_data, ctg_paths (can specify e.g. the parameters of the assembly)') 
     args = parser.parse_args(argv[1:])
     return args
 
 def main(argv=sys.argv):
     args = parse_args(argv)
     basedir = args.basedir
-    rawread_dir = os.path.abspath( os.path.join( basedir, "0-rawreads" )  )
-    pread_dir = os.path.abspath( os.path.join( basedir, "1-preads_ovl" ) )
-    asm_dir = os.path.abspath( os.path.join( basedir, "2-asm-falcon") )
+    rawsubdir = args.rawReadDir
+    correctsubdir = args.correctedReadDir
+    assembsubdir = args.assemblyDir
+    rawread_dir = os.path.abspath( os.path.join( basedir, rawsubdir )  )
+    pread_dir = os.path.abspath( os.path.join( basedir, correctsubdir ) )
+    asm_dir = os.path.abspath( os.path.join( basedir, assembsubdir) )
 
-    get_read_ctg_map(rawread_dir=rawread_dir, pread_dir=pread_dir, asm_dir=asm_dir)
+    get_read_ctg_map(rawread_dir=rawread_dir, pread_dir=pread_dir, asm_dir=asm_dir, raw_db=args.rawReadDbName, corr_db=args.correctReadDbName, asm_sf=args.assemblySuffix)
 
 if __name__ == "__main__":
     main()

@@ -7,7 +7,7 @@ Reader = io.CapturedProcessReaderContext
 
 
 def run_filter_stage1(db_fn, fn, max_diff, max_ovlp, min_ovlp, min_len):
-    cmd = "LA4Falcon -mo %s %s" % (db_fn, fn)
+    cmd = "/nfs/users/nfs_m/mm21/programs/FALCON-integrate/DALIGNER/LA4Falcon -mo %s %s" % (db_fn, fn)
     reader = Reader(cmd)
     with reader:
         return fn, filter_stage1(reader.readlines, max_diff, max_ovlp, min_ovlp, min_len)
@@ -63,7 +63,7 @@ def filter_stage1(readlines, max_diff, max_ovlp, min_ovlp, min_len):
         return ignore_rtn
 
 def run_filter_stage2(db_fn, fn, max_diff, max_ovlp, min_ovlp, min_len, ignore_set):
-    cmd = "LA4Falcon -mo %s %s" % (db_fn, fn)
+    cmd = "/nfs/users/nfs_m/mm21/programs/FALCON-integrate/DALIGNER/LA4Falcon -mo %s %s" % (db_fn, fn)
     reader = Reader(cmd)
     with reader:
         return fn, filter_stage2(reader.readlines, max_diff, max_ovlp, min_ovlp, min_len, ignore_set)
@@ -94,7 +94,7 @@ def filter_stage2(readlines, max_diff, max_ovlp, min_ovlp, min_len, ignore_set):
         return contained_id
 
 def run_filter_stage3(db_fn, fn, max_diff, max_ovlp, min_ovlp, min_len, ignore_set, contained_set, bestn):
-    cmd = "LA4Falcon -mo %s %s" % (db_fn, fn)
+    cmd = "/nfs/users/nfs_m/mm21/programs/FALCON-integrate/DALIGNER/LA4Falcon -mo %s %s" % (db_fn, fn)
     reader = Reader(cmd)
     with reader:
         return fn, filter_stage3(reader.readlines, max_diff, max_ovlp, min_ovlp, min_len, ignore_set, contained_set, bestn)

@@ -1,3 +1,4 @@
+
 from falcon_kit.multiproc import Pool
 import falcon_kit.util.io as io
 import argparse
@@ -59,35 +60,35 @@ def filter_stats(readlines, min_len):
         return rtn_data
 
 
-def run_filter_stats(fn, min_len):
-    cmd = "LA4Falcon -mo ../1-preads_ovl/preads.db %s" % fn
+def run_filter_stats(fn, db, min_len):
+    cmd = "/nfs/users/nfs_m/mm21/programs/FALCON-integrate/DALIGNER/LA4Falcon -mo %s %s" % (db, fn) 
     reader = Reader(cmd)
     with reader:
         return fn, filter_stats(reader.readlines, min_len)
 
-def run_ovlp_stats(exe_pool, file_list, min_len):
+def run_ovlp_stats(exe_pool, file_list, min_len, db):
     inputs = []
     for fn in file_list:
         if len(fn) != 0:
-            inputs.append( (run_filter_stats, fn, min_len ) )
+            inputs.append( (run_filter_stats, fn, db, min_len ) )
     for res in exe_pool.imap(io.run_func, inputs):
         for l in res[1]:
             print " ".join([str(c) for c in l])
 
-def try_run_ovlp_stats(n_core, fofn, min_len):
+def try_run_ovlp_stats(n_core, fofn, min_len, db):
     io.LOG('starting ovlp_stats')
     file_list = io.validated_fns(fofn)
     io.LOG('fofn %r: %r' %(fofn, file_list))
     n_core = min(n_core, len(file_list))
     exe_pool = Pool(n_core)
     try:
-        run_ovlp_stats(exe_pool, file_list, min_len)
+        run_ovlp_stats(exe_pool, file_list, min_len, db)
         io.LOG('finished ovlp_stats')
     except KeyboardInterrupt:
         io.LOG('terminating ovlp_stats workers...')
         exe_pool.terminate()
 
-def ovlp_stats(fofn, min_len, n_core, stream, debug, silent):
+def ovlp_stats(fofn, min_len, n_core, stream, debug, silent, db):
     if debug:
         n_core = 0
         silent = False
@@ -96,7 +97,7 @@ def ovlp_stats(fofn, min_len, n_core, stream, debug, silent):
     if stream:
         global Reader
         Reader = io.StreamedProcessReaderContext
-    try_run_ovlp_stats(n_core, fofn, min_len)
+    try_run_ovlp_stats(n_core, fofn, min_len, db)
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description='a simple multi-processes LAS ovelap data filter',
@@ -106,6 +107,8 @@ def parse_args(argv):
                  '0 for main process only')
     parser.add_argument('--fofn', type=str, required=True,
             help='file contains the path of all LAS file to be processed in parallel')
+    parser.add_argument('--db', type=str, required=True,
+            help='path to the Dazzler database of error-corrected reads')
     parser.add_argument('--min_len', type=int, default=2500,
             help="min length of the reads")
     parser.add_argument('--stream', action='store_true',

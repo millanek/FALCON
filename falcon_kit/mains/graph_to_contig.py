@@ -1,9 +1,10 @@
 import networkx as nx
+import sys
 #from pbcore.io import FastaReader
 from falcon_kit.FastaReader import FastaReader
 from falcon_kit import kup, falcon, DWA
 
-read_fasta = "preads4falcon.fasta"
+
 edge_data_file = "sg_edges_list"
 utg_data_file = "utg_data"
 ctg_data_file = "ctg_paths"
@@ -60,9 +61,24 @@ def reverse_end( node_id ):
     new_end = "B" if end == "E" else "E"
     return node_id + ":" + new_end
 
-def main(argv=None):
+def main(argv=sys.argv):
+    import argparse
+
+    parser = argparse.ArgumentParser(description='generate contigs out of a string graph (files: sg_edges_list, utg_data, ctg_paths) and a fasta file of sequences',
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('fasta_file', help='a file with all the corrected read sequences')
+
+    parser.add_argument('--run_name', type=str, default="",
+                        help='will be used as suffix for input and output files')
+    args = parser.parse_args(argv[1:])
+   
+    suffix = ""
+    if args.run_name != "":
+        suffix = "_" + args.run_name
+ 
+    read_fasta = args.fasta_file
     reads_in_layout = set()
-    with open(edge_data_file) as f:
+    with open(edge_data_file + suffix) as f:
         for l in f:
             l = l.strip().split()
             """001039799:E 000333411:E 000333411 17524 20167 17524 99.62"""
@@ -81,9 +97,10 @@ def main(argv=None):
         if r.name not in reads_in_layout:
             continue
         seqs[r.name] = r.sequence.upper()
+        #sys.stderr.write(r.name,'\n')
 
     edge_data = {}
-    with open(edge_data_file) as f:
+    with open(edge_data_file + suffix) as f:
         for l in f:
             l = l.strip().split()
             """001039799:E 000333411:E 000333411 17524 20167 17524 99.62"""
@@ -106,11 +123,13 @@ def main(argv=None):
             else:
                 # t and s were swapped for 'c' alignments in ovlp_to_graph.generate_string_graph():702
                 # They were translated from reverse-dir to forward-dir coordinate system in LA4Falcon.
+		#print "This:"
                 e_seq = "".join([ RCMAP[c] for c in seqs[ rid ][ t:s ][::-1] ])
+                # e_seq = ""
             edge_data[ (v, w) ] = ( rid, s, t, aln_score, idt, e_seq )
 
     utg_data = {}
-    with open(utg_data_file) as f:
+    with open(utg_data_file + suffix) as f:
         for l in f:
             l = l.strip().split()
             s, v, t, type_, length, score, path_or_edges = l
@@ -124,15 +143,15 @@ def main(argv=None):
                 path_or_edges = [ tuple(e.split("~")) for e in path_or_edges.split("|") ]
             utg_data[ (s,v,t) ] = type_, length, score, path_or_edges
 
-    p_ctg_out = open("p_ctg.fa","w")
-    a_ctg_out = open("a_ctg_all.fa","w")
-    a_ctg_base_out = open("a_ctg_base.fa","w")
-    p_ctg_t_out = open("p_ctg_tiling_path","w")
-    a_ctg_t_out = open("a_ctg_tiling_path","w")
-    a_ctg_base_t_out = open("a_ctg_base_tiling_path","w")
+    p_ctg_out = open("p_ctg"+suffix+".fa","w")
+    a_ctg_out = open("a_ctg_all"+suffix+".fa","w")
+    a_ctg_base_out = open("a_ctg_base"+suffix+".fa","w")
+    p_ctg_t_out = open("p_ctg_tiling_path"+suffix,"w")
+    a_ctg_t_out = open("a_ctg_tiling_path"+suffix,"w")
+    a_ctg_base_t_out = open("a_ctg_base_tiling_path"+suffix,"w")
     layout_ctg = set()
 
-    with open(ctg_data_file) as f:
+    with open(ctg_data_file + suffix) as f:
         for l in f:
             l = l.strip().split()
             ctg_id, c_type_, i_utig, t0, length, score, utgs = l

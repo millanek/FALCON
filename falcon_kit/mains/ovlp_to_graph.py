@@ -633,7 +633,11 @@ def find_bundle(ug, u_edge_data, start_node, depth_cutoff, width_cutoff, length_
 def generate_string_graph(args):
 
     overlap_file = args.overlap_file
-
+    
+    ovlp_pars = ""
+    if args.params_fn != "":
+        ovlp_pars = "_" + args.params_fn
+    
     contained_reads = set()
     chimer_ids = set()
 
@@ -827,8 +831,8 @@ def generate_string_graph(args):
 
     if not args.disable_chimer_bridge_removal:
         chimer_nodes, chimer_edges = sg.mark_chimer_edges()
-
-        with open("chimers_nodes", "w") as f:
+        
+        with open("chimers_nodes" + ovlp_pars, "w") as f:
             for n in chimer_nodes:
                 print >>f, n
         del chimer_nodes
@@ -847,7 +851,7 @@ def generate_string_graph(args):
     if DEBUG_LOG_LEVEL > 1:
         print sum( [1 for c in sg.e_reduce.values() if c == False] )
 
-    out_f = open("sg_edges_list", "w")
+    out_f = open("sg_edges_list" + ovlp_pars, "w")
     nxsg = nx.DiGraph()
     edge_data = {}
     for v, w in sg.edges:
@@ -1315,6 +1319,10 @@ def ovlp_to_graph(args):
 
     #dual_path = {}
     sg2 = nx.DiGraph()
+    
+    ovlp_pars = ""
+    if args.params_fn != "":
+        ovlp_pars = "_" + args.params_fn
 
     for v, w in edge_data:
         assert (reverse_end(w), reverse_end(v)) in edge_data
@@ -1342,7 +1350,7 @@ def ovlp_to_graph(args):
 
 
     if DEBUG_LOG_LEVEL > 1:
-        with open("utg_data0","w") as f:
+        with open("utg_data0" + ovlp_pars,"w") as f:
             for s, t, v in u_edge_data:
                 rs = reverse_end(t)
                 rt = reverse_end(s)
@@ -1360,7 +1368,7 @@ def ovlp_to_graph(args):
 
     #phase 2, finding all "consistent" compound paths
     compound_paths = construct_compound_paths(ug2, u_edge_data)
-    compound_path_file = open("c_path","w")
+    compound_path_file = open("c_path" + ovlp_pars,"w")
 
     ug2_edges = set(ug2.edges(keys = True))
     edges_to_remove  = set()
@@ -1419,7 +1427,7 @@ def ovlp_to_graph(args):
 
     ug = ug2
 
-    with open("utg_data","w") as f:
+    with open("utg_data" + ovlp_pars,"w") as f:
         for s, t, v in u_edge_data:
             length, score, path_or_edges, type_ = u_edge_data[ (s, t, v) ]
 
@@ -1438,7 +1446,7 @@ def ovlp_to_graph(args):
 
     ctg_id = 0
 
-    ctg_paths = open("ctg_paths","w")
+    ctg_paths = open("ctg_paths" + ovlp_pars,"w")
 
     c_path.sort( key=lambda x: -x[3] )
 
@@ -1506,6 +1514,7 @@ def main(argv=sys.argv):
                         help='use local flow constraint method rather than best overlap method to resolve knots in string graph')
     parser.add_argument('--disable_chimer_bridge_removal', action="store_true", default=False,
                         help='disable chimer induced bridge removal')
-
+    parser.add_argument('--params_fn', type=str, default="",
+                        help='an (optional) string indicating the parameters used to build the overlaps; appended to output filenames')
     args = parser.parse_args(argv[1:])
     ovlp_to_graph(args)
