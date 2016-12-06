@@ -48,15 +48,21 @@ def write_sub_script(ofs, script):
         exe = ''
     return exe
 
+def write_script(script, script_fn, job_done_fn=None):
+    if job_done_fn:
+        script += '\ntouch {}'.format(job_done_fn)
+    with open(script_fn, 'w') as ofs:
+        exe = write_sub_script(ofs, script)
+
 def write_script_and_wrapper_top(script, wrapper_fn, job_done):
-    """
+    """NOT USED.
     Write script to a filename based on wrapper_fn, in same directory.
     Write wrapper to call it,
      and to write job_done on success and job_done.exit on any exit.
     'job_done' should be either abspath or relative to dir of wrapper_fn.
     """
     job_exit = job_done + '.exit'
-    wdir = os.path.dirname(wrapper_fn)
+    wdir = os.path.abspath(os.path.dirname(wrapper_fn))
     #mkdir(wdir) # To avoid races, callers must do this.
 
     root, ext = os.path.splitext(os.path.basename(wrapper_fn))
@@ -86,6 +92,8 @@ def select_rundir(tmpdir, wdir, script):
     return '{}/{}/falcontmp/{}/{}'.format(tmpdir, user, wdir, digest)
 
 def write_script_and_wrapper_for_tmp(tmpdir, script, wrapper_fn, job_done):
+    """NOT USED. This will be done in pypeFLOW.
+    """
     wdir = os.path.dirname(os.path.abspath(wrapper_fn))
     root, ext = os.path.splitext(os.path.basename(wrapper_fn))
     sub_script_bfn = root + '.xsub' + ext
@@ -111,7 +119,8 @@ rm -rf {rdir}
     return write_script_and_wrapper_top(tmp_wrapper_script, wrapper_fn, job_done)
 
 def get_write_script_and_wrapper(config):
-    """Return a function.
+    """NOT USED. This will be done in pypeFLOW.
+    Return a function.
     For now, we actually use only config['use_tmpdir'], a boolean.
     """
     use_tmpdir = config.get('use_tmpdir', None)
@@ -217,15 +226,16 @@ HPC.daligner {ovlp_HPCdaligner_option} -H{length_cutoff_pr} preads {last_block}-
 """.format(**params)
     return script
 
-def script_run_DB2Falcon(config):
+def script_run_DB2Falcon(config, preads4falcon_fn, preads_db):
     """Run in pread_dir.
     """
     params = dict(config)
     params.update(locals())
     script = """\
 # Given preads.db,
-# write preads4falcon.fasta, in 1-preads_ovl:
-time DB2Falcon -U preads
+# write preads4falcon.fasta (implicitly) in CWD.
+time DB2Falcon -U {preads_db}
+[ -f preads4falcon.fasta ] || exit 1
 """.format(**params)
     return script
 
@@ -255,8 +265,8 @@ ln -sf ${{db_dir}}/{db_prefix}.db .
 ln -sf ${{db_dir}}/.{db_prefix}.dust.anno .
 ln -sf ${{db_dir}}/.{db_prefix}.dust.data .
 {daligner_cmd}
-rm -f *.C?.las *.C?.S.las
-rm -f *.N?.las *.N?.S.las
+rm -f *.C?.las *.C?.S.las *.C??.las *.C??.S.las *.C???.las *.C???.S.las
+rm -f *.N?.las *.N?.S.las *.N??.las *.N??.S.las *.N???.las *.N???.S.las
 """.format(db_dir=db_dir, db_prefix=db_prefix, daligner_cmd=daligner_cmd)
         yield job_uid, bash
 
@@ -266,17 +276,17 @@ def scripts_merge(config, db_prefix, run_jobs_fn):
     """
     with open(run_jobs_fn) as f:
         mjob_data = functional.get_mjob_data(f)
+    #las_fns = functional.get_las_filenames(mjob_data, db_prefix) # ok, but tricky
     for p_id in mjob_data:
         bash_lines = mjob_data[p_id]
 
         script = []
         for line in bash_lines:
             script.append(line.replace('&&', ';'))
-        #script.append("mkdir -p ../las_files")
-        #script.append("ln -sf ../m_%05d/%s.%s.las ../las_files" % (p_id, db_prefix, p_id))
-        #script.append("ln -sf ./m_%05d/%s.%s.las .. " % (p_id, db_prefix, p_id))
-        #las_fn = '%s.%s.las' % (db_prefix, p_id))
-        yield p_id, '\n'.join(script + [''])
+        #las_fn = las_fns[p_id]
+        # We already know the output .las filename by convention.
+        las_fn = '%s.%s.las' % (db_prefix, p_id)
+        yield p_id, '\n'.join(script + ['']), las_fn
 
 def script_run_consensus(config, db_fn, las_fn, out_file_bfn):
     """config: falcon_sense_option, length_cutoff
@@ -293,6 +303,8 @@ def script_run_consensus(config, db_fn, las_fn, out_file_bfn):
     params.update(locals())
     if config["falcon_sense_skip_contained"]:
         run_consensus = """LA4Falcon -H$CUTOFF -fso {db_fn} {las_fn} | """
+    elif config["falcon_sense_greedy"]:
+        run_consensus = """LA4Falcon -H$CUTOFF -fog  {db_fn} {las_fn} | """
     else:
         run_consensus = """LA4Falcon -H$CUTOFF -fo  {db_fn} {las_fn} | """
     run_consensus += """fc_consensus {falcon_sense_option} >| {out_file_bfn}"""

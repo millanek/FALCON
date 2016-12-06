@@ -1,19 +1,22 @@
-from pypeflow.data import PypeLocalFile, makePypeLocalFile, fn
-from pypeflow.task import PypeTask, PypeThreadTaskBase, PypeTaskBase
-from pypeflow.controller import PypeWorkflow, PypeMPWorkflow, PypeThreadWorkflow
-from falcon_kit.FastaReader import FastaReader
-from falcon_kit.fc_asm_graph import AsmGraph
+from __future__ import absolute_import
+from pypeflow.simple_pwatcher_bridge import (PypeProcWatcherWorkflow, MyFakePypeThreadTaskBase,
+        makePypeLocalFile, fn, PypeTask)
+PypeThreadTaskBase = MyFakePypeThreadTaskBase
+from .. import pype_tasks
 import argparse
 import glob
+import logging
 import sys
 import subprocess as sp
 import shlex
 import os
 
+LOG = logging.getLogger(__name__)
+
 def make_dirs(d):
     if not os.path.isdir(d):
+        LOG.debug('mkdirs {}'.format(d))
         os.makedirs(d)
-
 
 def get_read_ctg_map(rawread_dir, pread_dir, asm_dir, raw_db, corr_db, asm_sf):
 
@@ -97,14 +100,19 @@ def get_read_ctg_map(rawread_dir, pread_dir, asm_dir, raw_db, corr_db, asm_sf):
                     k = (pid, rid, oid)
                     pread_to_contigs.setdefault( k, set() )
                     pread_to_contigs[ k ].add( ctg )
+    inputs = { 'rawread_id_file': rawread_id_file,
+               'pread_id_file': pread_id_file,
+               'sg_edges_list': sg_edges_list,
+               'utg_data': utg_data,
+               'ctg_paths': ctg_paths }
 
+    read_to_contig_map = makePypeLocalFile(os.path.join(read_map_dir, 'get_ctg_read_map', 'read_to_contig_map'))
 
-            for k in pread_to_contigs:
-                pid, rid, oid = k
-                for ctg in list(pread_to_contigs[ k ]):
-                    print >>f, "%09d %09d %s %s" % (pid, rid, oid, ctg)
-
-    wf.addTask( generate_read_to_ctg_map )
+    task = PypeTask(
+              inputs = inputs,
+              outputs = {'read_to_contig_map': read_to_contig_map},
+    )
+    wf.addTask(task(pype_tasks.task_generate_read_to_ctg_map))
 
     wf.refreshTargets() # block
 
@@ -123,6 +131,7 @@ information from the chain of mapping: (contig id) -> (internal p-read id) -> (i
     return args
 
 def main(argv=sys.argv):
+    logging.basicConfig()
     args = parse_args(argv)
     basedir = args.basedir
     rawsubdir = args.rawReadDir
@@ -134,5 +143,5 @@ def main(argv=sys.argv):
 
     get_read_ctg_map(rawread_dir=rawread_dir, pread_dir=pread_dir, asm_dir=asm_dir, raw_db=args.rawReadDbName, corr_db=args.correctReadDbName, asm_sf=args.assemblySuffix)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

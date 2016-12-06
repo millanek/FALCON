@@ -1,5 +1,6 @@
 from . import bash
 import ConfigParser
+import contextlib
 import json
 import logging
 import logging.config
@@ -11,7 +12,7 @@ import tempfile
 import time
 import uuid
 
-logger = None
+logger = logging.getLogger(__name__)
 
 def _prepend_env_paths(content, names):
     """
@@ -38,7 +39,9 @@ def update_env_in_script(fn, names):
         ofs.write(content)
 
 def use_tmpdir_for_files(basenames, src_dir, link_dir):
-    """Generate script to copy db files to tmpdir (for speed).
+    """NOT USED. Kept only for reference. This will be done in pypeFLOW.
+
+    Generate script to copy db files to tmpdir (for speed).
     - Choose tmp_dir, based on src_dir name.
     - rsync basenames into tmp_dir  # after 'flock', per file
     - symlink from link_dir into tmp_dir.
@@ -101,6 +104,7 @@ def get_config(config):
             config.set(section, name, val)
     add('input_fofn', 'NA')
     add('target', 'assembly')
+    #add('sge_option', 'NA') # Needed for PBS, but not for everything
     add('sge_option_da', 'NA')
     add('sge_option_la', 'NA')
     add('sge_option_pda', 'NA')
@@ -128,19 +132,32 @@ def parse_config(config_fn):
     return config
 
 def get_dict_from_old_falcon_cfg(config):
-    section = 'General'
-
     job_type = "SGE"
+    section = 'General'
     if config.has_option(section, 'job_type'):
         job_type = config.get(section, 'job_type')
+
+    # This was not set in the past, so we must treat is specially.
+    if config.has_option(section, 'sge_option'):
+        sge_option = config.get(section, 'sge_option')
+    else:
+        sge_option = config.get(section, 'sge_option_da')
 
     job_queue = "default"
     if config.has_option(section, 'job_queue'):
         job_queue = config.get(section, 'job_queue')
 
+    pwatcher_type = 'fs_based'
+    if config.has_option(section, 'pwatcher_type'):
+        pwatcher_type = config.get(section, 'pwatcher_type')
+
     default_concurrent_jobs = 8
     if config.has_option(section, 'default_concurrent_jobs'):
         default_concurrent_jobs = config.getint(section, 'default_concurrent_jobs')
+
+    pwatcher_directory = 'mypwatcher'
+    if config.has_option(section, 'pwatcher_directory'):
+        pwatcher_directory = config.get(section, 'pwatcher_directory')
 
     pa_concurrent_jobs = default_concurrent_jobs
     if config.has_option(section, 'pa_concurrent_jobs'):
@@ -222,11 +239,11 @@ def get_dict_from_old_falcon_cfg(config):
 
     falcon_sense_skip_contained = False
     if config.has_option(section, 'falcon_sense_skip_contained'):
-        falcon_sense_skip_contained = config.get(section, 'falcon_sense_skip_contained')
-        if falcon_sense_skip_contained in ["True", "true", "1"]:
-            falcon_sense_skip_contained = True
-        else:
-            falcon_sense_skip_contained = False
+        falcon_sense_skip_contained = config.getboolean(section, 'falcon_sense_skip_contained')
+
+    falcon_sense_greedy = False
+    if config.has_option(section, 'falcon_sense_greedy'):
+        falcon_sense_greedy = config.getboolean(section, 'falcon_sense_greedy')
 
     genome_size = 0
     if config.has_option(section, 'genome_size'):
@@ -276,7 +293,7 @@ def get_dict_from_old_falcon_cfg(config):
         tmpdir = config.get(section, 'use_tmpdir')
         if '/' in tmpdir:
             tempfile.tempdir = tmpdir
-            use_tmpdir = True
+            use_tmpdir = tmpdir
         else:
             use_tmpdir = config.getboolean(section, 'use_tmpdir')
     else:
@@ -301,6 +318,7 @@ def get_dict_from_old_falcon_cfg(config):
                    "seed_coverage" : seed_coverage,
                    "length_cutoff" : length_cutoff,
                    "length_cutoff_pr" : length_cutoff_pr,
+                   "sge_option": sge_option,
                    "sge_option_da": config.get(section, 'sge_option_da'),
                    "sge_option_la": config.get(section, 'sge_option_la'),
                    "sge_option_pda": config.get(section, 'sge_option_pda'),
@@ -319,8 +337,11 @@ def get_dict_from_old_falcon_cfg(config):
                    "fc_ovlp_to_graph_option": fc_ovlp_to_graph_option,
                    "falcon_sense_option": falcon_sense_option,
                    "falcon_sense_skip_contained": falcon_sense_skip_contained,
+                   "falcon_sense_greedy": falcon_sense_greedy,
                    "stop_all_jobs_on_failure": stop_all_jobs_on_failure,
                    "use_tmpdir": use_tmpdir,
+                   "pwatcher_type": pwatcher_type,
+                   "pwatcher_directory": pwatcher_directory,
                    TEXT_FILE_BUSY: bash.BUG_avoid_Text_file_busy,
                    }
     provided = dict(config.items(section))
@@ -401,11 +422,23 @@ def setup_logger(logging_config_fn):
 
     return logger
 
+@contextlib.contextmanager
+def cd(newdir):
+    prevdir = os.getcwd()
+    logger.debug('CD: %r <- %r' %(newdir, prevdir))
+    os.chdir(os.path.expanduser(newdir))
+    try:
+        yield
+    finally:
+        logger.debug('CD: %r -> %r' %(newdir, prevdir))
+        os.chdir(prevdir)
+
 def make_fofn_abs(i_fofn_fn, o_fofn_fn):
-    """Copy i_fofn to o_fofn, but with relative filenames expanded for CWD.
+    """Copy i_fofn to o_fofn, but with relative filenames expanded for the dir of i_fofn.
     """
-    assert os.path.abspath(o_fofn_fn) != os.path.abspath(i_fofn_fn)
+    assert os.path.abspath(o_fofn_fn) != os.path.abspath(i_fofn_fn), '{!r} != {!r}'.format(o_fofn_fn, i_fofn_fn)
     with open(i_fofn_fn) as ifs, open(o_fofn_fn, 'w') as ofs:
+      with cd(os.path.dirname(i_fofn_fn)):
         for line in ifs:
             ifn = line.strip()
             if not ifn: continue
@@ -459,31 +492,31 @@ def get_length_cutoff(length_cutoff, fn):
 def build_rdb(input_fofn_fn, config, job_done, script_fn, run_jobs_fn):
     run_jobs_fn = os.path.basename(run_jobs_fn)
     script = bash.script_build_rdb(config, input_fofn_fn, run_jobs_fn)
-    bash.get_write_script_and_wrapper(config)(script, script_fn, job_done)
+    bash.write_script(script, script_fn, job_done)
 
 def build_pdb(input_fofn_fn, config, job_done, script_fn, run_jobs_fn):
     run_jobs_fn = os.path.basename(run_jobs_fn)
     script = bash.script_build_pdb(config, input_fofn_fn, run_jobs_fn)
-    bash.get_write_script_and_wrapper(config)(script, script_fn, job_done)
+    bash.write_script(script, script_fn, job_done)
 
-def run_db2falcon(config, job_done, script_fn):
-    script = bash.script_run_DB2Falcon(config)
-    bash.get_write_script_and_wrapper(config)(script, script_fn, job_done)
+def run_db2falcon(config, preads4falcon_fn, preads_db, job_done, script_fn):
+    script = bash.script_run_DB2Falcon(config, preads4falcon_fn, preads_db)
+    bash.write_script(script, script_fn, job_done)
 
 def run_falcon_asm(config, las_fofn_fn, preads4falcon_fasta_fn, db_file_fn, job_done, script_fn):
     script = bash.script_run_falcon_asm(config, las_fofn_fn, preads4falcon_fasta_fn, db_file_fn)
-    bash.get_write_script_and_wrapper(config)(script, script_fn, job_done)
+    bash.write_script(script, script_fn, job_done)
 
 def run_report_pre_assembly(i_raw_reads_db_fn, i_preads_fofn_fn, genome_length, length_cutoff, o_json_fn, job_done, script_fn):
     script = bash.script_run_report_pre_assembly(i_raw_reads_db_fn, i_preads_fofn_fn, genome_length, length_cutoff, o_json_fn)
-    bash.write_script_and_wrapper_top(script, script_fn, job_done)
+    bash.write_script(script, script_fn, job_done)
 
 def run_daligner(daligner_script, db_prefix, config, job_done, script_fn):
-    bash.get_write_script_and_wrapper(config)(daligner_script, script_fn, job_done)
+    bash.write_script(daligner_script, script_fn, job_done)
 
 def run_las_merge(script, job_done, config, script_fn):
-    bash.get_write_script_and_wrapper(config)(script, script_fn, job_done)
+    bash.write_script(script, script_fn, job_done)
 
 def run_consensus(db_fn, las_fn, out_file_fn, config, job_done, script_fn):
     script = bash.script_run_consensus(config, db_fn, las_fn, os.path.basename(out_file_fn))
-    bash.get_write_script_and_wrapper(config)(script, script_fn, job_done)
+    bash.write_script(script, script_fn, job_done)
